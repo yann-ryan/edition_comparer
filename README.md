@@ -5,7 +5,7 @@ This Shiny application needs to run locally as it uses local environment variabl
 You need to have a working MariaDB setup on your local machine already. 
 
 - Clone (or download) this repository. 
-- Set the correct username and password for the Maria DB server with the following:
+- Set the correct username and password for the Maria DB server by running these two lines in an R console or script: 
 
 ```r
 Sys.setenv("DB_USER" = "<USER HERE>")
