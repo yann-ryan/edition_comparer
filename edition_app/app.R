@@ -17,6 +17,7 @@ library(DBI)
 library(RMariaDB)
 library(IRanges)
 library(plotly)
+library(sortable)
 options(scipen = 999999)
 
 con <- dbConnect(
@@ -73,12 +74,14 @@ ui <- fluidPage(
   titlePanel("Edition Comparer"),
   
   sidebarLayout(
-    sidebarPanel(
+    sidebarPanel(tabsetPanel(tabPanel("Groups",
       textInput("bins", "Work ID:", "2179-fable of bees or private vices public benefits"),
       actionButton('click', 'Generate'),
-      uiOutput('compare'),
-      plotlyOutput("distPlot")
-    ),
+      actionButton('add', 'Add to list'),
+      actionButton('reset', 'Reset'), textOutput('current'), textOutput('seed'),
+      uiOutput("groups")),tabPanel("Plot",
+      plotlyOutput("distPlot", width = '30vw'))
+    )),
     
     # Show a plot of the generated distribution
     mainPanel(tags$head(
@@ -92,7 +95,16 @@ ui <- fluidPage(
 server <- function(input, output) {
   
   
-  output$compare = renderUI({
+  # output$compare = renderUI({
+  #   
+  # 
+  #     
+  #    # selectInput('which_to_compare', 'Seed: ', choices = work_ids)
+  #   }) 
+  # })
+  
+  
+  output$groups = renderUI({
     
     withProgress(message = 'Generating editions from work ID', value = 0, {
       
@@ -105,27 +117,95 @@ server <- function(input, output) {
         arrange(publication_year) %>% 
         select(ecco_id, publication_year)
       
-      work_ids = work_ids_df %>% pull(ecco_id)
-      names(work_ids) = work_ids_df %>% pull(publication_year)
-      
-      selectInput('which_to_compare', 'Seed: ', choices = work_ids)
-    }) 
+      work_ids = work_ids_df %>% pull(publication_year)
+      names(work_ids) = work_ids_df %>% pull(ecco_id)
+    
+    bucket_list(
+    header = "",
+    group_name = "rank_groups",
+    orientation = "horizontal",
+    
+    add_rank_list(
+      text = h5("Seed: "),
+      input_id = "seed"),
+    
+    add_rank_list(
+      text = h5("Compare: "),
+      input_id = "which_to_compare"),
+    
+    add_rank_list(
+      text = h5("Editions"),
+      input_id = "delete",
+      labels = work_ids))
+    
+    })
+    
+    
+
+    
+    })
+  
+  
+  values = reactiveValues()
+  
+  observeEvent(input$add, {
+    
+    values$keep = unique(c(values$keep, input$which_to_compare))
+    
+    
+    
   })
+  
+  
+  seed = reactiveValues()
+  
+  observe({
+    
+    seed$keep = unique(c(seed$keep, input$seed))  
+    
+    
+    
+  })
+  
+  
+  output$current = renderText({
+    
+    paste0("Current:", paste0(unique(values$keep), collapse = ' ;'))
+    
+  })
+  
+  
+  output$seed = renderText({
+    
+    paste0("Seed:", paste0(unique(seed$keep)), collapse  = ' ;')
+    
+  })
+  
+  
+  observeEvent(input$reset,{
+    
+   seed$keep = NULL
+  values$keep = NULL
+    
+  } )
   
   hypo = eventReactive(input$click, {
     withProgress(message = 'Gathering reuses', value = 0, {
+      print(values$keep)
+      #i = input$bins
       
-      i = input$bins
+      # all_ids = estc_core %>%
+      #   filter(work_id == i) %>%
+      #   left_join(idmap, by = 'estc_id') %>%
+      #   arrange(publication_year) %>% filter(!is.na(ecco_id)) %>%
+      #   pull(ecco_id)
       
-      all_ids = estc_core %>% 
-        filter(work_id == i) %>% 
-        left_join(idmap, by = 'estc_id') %>% 
-        arrange(publication_year) %>% filter(!is.na(ecco_id)) %>%  
-        pull(ecco_id)
+      x = seed$keep 
+      y = values$keep
       
-      x = input$which_to_compare  
-      
-      ids = idmap %>% filter(ecco_id %in% all_ids)
+      print(x)
+      print(y)
+      ids = idmap %>% filter(ecco_id %in% y)
       
       first_id = idmap %>% filter(ecco_id == x)
       
@@ -139,7 +219,7 @@ server <- function(input, output) {
       
       
       
-      y = all_ids[! all_ids == x]
+      #y = all_ids[! all_ids == x]
       
       withProgress(message = 'Calculating Missing Ranges', value = 0, {
         
@@ -171,7 +251,9 @@ server <- function(input, output) {
       arrange(work_id.y, publication_year) %>% ungroup() %>% 
       #mutate(sort_level = 1:nrow(.)) %>% 
       ggplot(aes(text = paste0(short_title, " (", publication_year, ")"))) + 
-      geom_segment(aes( color =type, x = start, xend = end, y = doc_id, yend = doc_id), size = 2) + theme_void() + theme(legend.position = 'none') 
+      geom_segment(aes(color =doc_id, x = start, xend = end, y = doc_id, yend = doc_id), size = 10) + theme_void() + 
+      theme(legend.position = 'none') +
+      scale_color_viridis_d()
     
     
     
