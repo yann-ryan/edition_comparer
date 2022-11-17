@@ -37,11 +37,12 @@ get_ranges = function(ecco_id, id, reuse_df){
   tryCatch({
     ra = reuse_df %>% 
       filter(ecco_id.x == id & ecco_id.y == ecco_id) %>% 
-      arrange(t2_start, t2_end) %>% select(start = t2_start, end = t2_end)
+      arrange(t2_start, t2_end) %>% 
+      select(start = t2_start, end = t2_end)
     
     ir1 = IRanges(start = ra$start, end = ra$end)
     
-    islands = ir1 %>% 
+    islands = ir1 %>% reduce() %>% 
       as.data.frame() %>% 
       as_tibble() %>% 
       mutate(type = 'island')
@@ -61,9 +62,9 @@ get_ranges = function(ecco_id, id, reuse_df){
   
 }
 
-idmap <- tbl(con,'idmap',dbplyr::in_schema("hpc-hd","idmap"))
-full_reuses <- tbl(con,dbplyr::in_schema("hpc-hd","textreuses_2d"))
-estc_core = tbl(con,dbplyr::in_schema("hpc-hd","estc_core"))
+idmap <- tbl(con,dbplyr::in_schema("hpc-hd","idmap_a"))
+full_reuses <- tbl(con,dbplyr::in_schema("hpc-hd","textreuses_2d_a"))
+estc_core = tbl(con,dbplyr::in_schema("hpc-hd","estc_core_a"))
 
 
 
@@ -112,13 +113,15 @@ server <- function(input, output) {
       
       work_ids_df = idmap %>% filter(work_id == x) %>% 
         inner_join(estc_core %>% 
-                     select(estc_id, publication_year)) %>% mutate(publication_year = as.integer(publication_year)) %>% 
-        #mutate(publication_year = paste0(ecco_id, " (", publication_year, ")")) %>% 
-        arrange(publication_year) %>% 
-        select(ecco_id, publication_year)
+                     select(estc_id, publication_year, short_title)) %>% mutate(publication_year = as.integer(publication_year)) %>% 
+        #mutate(publication_year = paste0(ecco_id, " (", publication_year, ")"))  %>% 
+        select(ecco_id, publication_year, short_title) %>% mutate(title = paste0(short_title, " (", publication_year, ")"))
       
-      work_ids = work_ids_df %>% pull(publication_year)
-      names(work_ids) = work_ids_df %>% pull(ecco_id)
+      work_ids = work_ids_df %>% 
+        arrange(publication_year)%>% pull(title)
+      
+      names(work_ids) = work_ids_df %>% 
+        arrange(publication_year)%>% pull(ecco_id)
     
     bucket_list(
     header = "",
@@ -205,6 +208,7 @@ server <- function(input, output) {
       
       print(x)
       print(y)
+      
       ids = idmap %>% filter(ecco_id %in% y)
       
       first_id = idmap %>% filter(ecco_id == x)
@@ -251,7 +255,7 @@ server <- function(input, output) {
       arrange(work_id.y, publication_year) %>% ungroup() %>% 
       #mutate(sort_level = 1:nrow(.)) %>% 
       ggplot(aes(text = paste0(short_title, " (", publication_year, ")"))) + 
-      geom_segment(aes(color =doc_id, x = start, xend = end, y = doc_id, yend = doc_id), size = 10) + theme_void() + 
+      geom_segment(aes(color = doc_id, x = start, xend = end, y = doc_id, yend = doc_id), size = 10) + theme_void() + 
       theme(legend.position = 'none') +
       scale_color_viridis_d()
     
