@@ -79,8 +79,11 @@ ui <- fluidPage(
       textInput("bins", "Work ID:", "2179-fable of bees or private vices public benefits"),
       actionButton('click', 'Generate'),
       actionButton('add', 'Add to list'),
-      actionButton('reset', 'Reset'), textOutput('current'), textOutput('seed'),
-      uiOutput("groups")),tabPanel("Plot",
+      actionButton('reset', 'Reset'), 
+      textOutput('current'), 
+      textOutput('seed'),
+      uiOutput("groups")),
+      tabPanel("Plot",radioButtons('type', 'Type: ', choices = c('Missing' = "gap", "Overlap" = 'island')),
       plotlyOutput("distPlot", width = '30vw'))
     )),
     
@@ -249,7 +252,7 @@ server <- function(input, output) {
     
     req(hypo())
     
-    p = hypo()  %>% filter(type == 'gap') %>% 
+    p = hypo()  %>% filter(type == input$type) %>% 
       arrange(desc(publication_year)) %>% 
       mutate(doc_id = factor(doc_id, levels = unique(doc_id))) %>% 
       arrange(work_id.y, publication_year) %>% ungroup() %>% 
@@ -274,7 +277,7 @@ server <- function(input, output) {
     d <- event_data("plotly_click")
     i = as.numeric(d['x'])
     
-    hypo() %>% filter(type == 'gap') %>% filter(end == i) %>% head(1) %>% 
+    hypo() %>% filter(type == input$type) %>% filter(end == i) %>% head(1) %>% 
       pull(gap_link)
   })
   
