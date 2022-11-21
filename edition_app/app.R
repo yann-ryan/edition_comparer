@@ -18,6 +18,9 @@ library(RMariaDB)
 library(IRanges)
 library(plotly)
 library(sortable)
+library(dplyr)
+
+renv::restore()
 options(scipen = 999999)
 
 con <- dbConnect(
@@ -42,18 +45,30 @@ get_ranges = function(ecco_id, id, reuse_df){
     
     ir1 = IRanges(start = ra$start, end = ra$end)
     
-    islands = ir1 %>% reduce() %>% 
+    islands = ir1 %>% IRanges::reduce() %>% 
       as.data.frame() %>% 
-      as_tibble() %>% 
-      mutate(type = 'island')
+      as_tibble()  %>% 
+      left_join(r1, join_by(start <= t2_start)) %>% 
+      mutate(startend = paste0(start, end)) %>% 
+      group_by(startend) %>% 
+      summarise(start = min(start), end  = max(end) , min_t1 = min(t1_start))%>% 
+      mutate(width = end - start) %>% 
+      mutate(max_t1 = min_t1 + width) %>% 
+      mutate(type = 'island')%>% select(start, end, width, type, min_t1, max_t1, -startend)
     
+    
+    
+    #left_join(r1, join_by(end >= t2_end,start <= t2_start))
     gaps = gaps(ir1) %>% 
       as.data.frame() %>% 
       as_tibble() %>% 
-      mutate(type = 'gap')
+      mutate(type = 'gap') %>% 
+      mutate(min_t1 = NA, max_t1= NA)
     
-    rbind(islands, gaps) %>% 
+    rbind(islands, gaps) %>%
       mutate(doc_id = ecco_id)
+    
+  
     
     
   }, error = function(e) {
@@ -197,20 +212,11 @@ server <- function(input, output) {
   
   hypo = eventReactive(input$click, {
     withProgress(message = 'Gathering reuses', value = 0, {
-      print(values$keep)
-      #i = input$bins
-      
-      # all_ids = estc_core %>%
-      #   filter(work_id == i) %>%
-      #   left_join(idmap, by = 'estc_id') %>%
-      #   arrange(publication_year) %>% filter(!is.na(ecco_id)) %>%
-      #   pull(ecco_id)
+
       
       x = seed$keep 
       y = values$keep
-      
-      print(x)
-      print(y)
+
       
       ids = idmap %>% filter(ecco_id %in% y)
       
@@ -234,7 +240,8 @@ server <- function(input, output) {
           data.table::rbindlist() %>% 
           mutate(gap_link_text = paste0("<a href='https://a3s.fi/octavo-reader/index.html#?doc=",doc_id,"&startOffset=",start,"&endOffset=", end, "'>", doc_id, "</a><br>"))%>% 
           mutate(gap_link = paste0("https://a3s.fi/octavo-reader/index.html#?doc=",doc_id,"&startOffset=",start,"&endOffset=", end)) %>% 
-          mutate(gap_link = paste0(gap_link, "&doc=", x, "&startOffset=",start,"&endOffset=", end)) %>%
+          mutate(gap_link1 = paste0(gap_link, "&doc=", x, "&startOffset=",start,"&endOffset=", end))%>% 
+          mutate(gap_link2 = paste0(gap_link, "&doc=", x, "&startOffset=",min_t1,"&endOffset=", max_t1)) %>%
           left_join(r1 %>% 
                       distinct(ecco_id.y, short_title, publication_year, work_id.y), by = c('doc_id' = 'ecco_id.y'))
         
@@ -277,8 +284,17 @@ server <- function(input, output) {
     d <- event_data("plotly_click")
     i = as.numeric(d['x'])
     
-    hypo() %>% filter(type == input$type) %>% filter(end == i) %>% head(1) %>% 
-      pull(gap_link)
+    if(input$type == "island"){
+    
+    hypo() %>% 
+      filter(type == input$type) %>% filter(end == i) %>% head(1) %>% 
+      pull(gap_link2)
+      
+    } else
+      hypo() %>% 
+      filter(type == input$type) %>% filter(end == i) %>% head(1) %>% 
+      pull(gap_link1)
+      
   })
   
   
