@@ -43,18 +43,17 @@ get_ranges = function(ecco_id, id, reuse_df){
       arrange(t2_start, t2_end) %>% 
       select(start = t2_start, end = t2_end)
     
+    index = reuse_df %>% select(t2_ind = t2_start, min_t1 = t1_start)
+    
     ir1 = IRanges(start = ra$start, end = ra$end)
     
-    islands = ir1 %>% IRanges::reduce() %>% 
+    islands = ir1 %>% 
+      IRanges::reduce() %>% 
       as.data.frame() %>% 
-      as_tibble()  %>% 
-      left_join(r1, join_by(start <= t2_start)) %>% 
-      mutate(startend = paste0(start, end)) %>% 
-      group_by(startend) %>% 
-      summarise(start = min(start), end  = max(end) , min_t1 = min(t1_start))%>% 
-      mutate(width = end - start) %>% 
+      as_tibble() %>% 
+      left_join(index, by = c('start' = 't2_ind')) %>% 
       mutate(max_t1 = min_t1 + width) %>% 
-      mutate(type = 'island')%>% select(start, end, width, type, min_t1, max_t1, -startend)
+      mutate(type = 'island')%>% select(start, end, width, type, min_t1, max_t1)
     
     
     
